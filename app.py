@@ -1,6 +1,6 @@
 from flask import Flask, render_template
 from db import init_db
-from routes import tasks_bp
+from routes.tasks import tasks_bp
 
 app = Flask(__name__)
 
