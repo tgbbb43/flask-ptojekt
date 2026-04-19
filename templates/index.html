@@ -1,0 +1,221 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Todo App - Task Manager</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}" />
+</head>
+<body>
+  <div class="container">
+    <h1>Todo List</h1>
+
+    <form id="add-form">
+      <input
+        type="text"
+        id="new-title"
+        placeholder="What needs to be done?"
+        autocomplete="off"
+        required
+      />
+      <button type="submit">Add Task</button>
+    </form>
+
+    <ul id="task-list"></ul>
+
+    <p id="empty-msg" class="empty-msg hidden">No tasks yet. Add one above!</p>
+    <p id="error-msg" class="error-msg hidden" style="color: #e74c3c; font-weight: bold; text-align: center;"></p>
+  </div>
+
+  <script>
+    const API = "/tasks";
+
+    const taskList  = document.getElementById("task-list");
+    const emptyMsg  = document.getElementById("empty-msg");
+    const errorMsg  = document.getElementById("error-msg");
+    const addForm   = document.getElementById("add-form");
+    const newTitle  = document.getElementById("new-title");
+
+    // Helper function to extract MongoDB ID (handles $oid format)
+    function getTaskId(task) {
+        if (!task) return null;
+        if (task._id && typeof task._id === 'object' && task._id.$oid) return task._id.$oid;
+        return task._id || task.id;
+    }
+
+    function showError(msg) {
+      errorMsg.textContent = msg;
+      errorMsg.classList.remove("hidden");
+      setTimeout(() => errorMsg.classList.add("hidden"), 5000);
+    }
+
+    function renderTasks(tasks) {
+      taskList.innerHTML = "";
+      
+      if (!tasks || tasks.length === 0) {
+        emptyMsg.classList.remove("hidden");
+        return;
+      }
+      
+      emptyMsg.classList.add("hidden");
+
+      tasks.forEach(task => {
+        const taskId = getTaskId(task);
+        const isCompleted = task.completed || false;
+        
+        const li = document.createElement("li");
+        li.className = "task-item" + (isCompleted ? " completed" : "");
+        li.dataset.id = taskId;
+
+        li.innerHTML = `
+          <label class="checkbox-label">
+            <input type="checkbox" class="toggle-cb" ${isCompleted ? "checked" : ""} />
+            <span class="title-text">${escapeHtml(task.title)}</span>
+          </label>
+          <div class="actions">
+            <button class="btn-edit" title="Edit">&#9998;</button>
+            <button class="btn-delete" title="Delete">&#10005;</button>
+          </div>
+        `;
+
+        // Event Listeners
+        li.querySelector(".toggle-cb").onchange = () => toggleTask(taskId, !isCompleted);
+        li.querySelector(".btn-delete").onclick = () => deleteTask(taskId);
+        li.querySelector(".btn-edit").onclick = () => startEdit(li, task, taskId);
+
+        taskList.appendChild(li);
+      });
+    }
+
+    function escapeHtml(str) {
+      if (!str) return "";
+      const div = document.createElement('div');
+      div.textContent = str;
+      return div.innerHTML;
+    }
+
+    // Load tasks (GET)
+    async function loadTasks() {
+      try {
+        const res = await fetch(API);
+        const data = await res.json();
+        
+        console.log("Data received from server:", data);
+
+        // Ensure we extract the array correctly
+        const tasks = data.data || (Array.isArray(data) ? data : []);
+        renderTasks(tasks);
+      } catch (e) {
+        console.error("Loading failed:", e);
+        showError("Failed to load tasks from server.");
+      }
+    }
+
+    // Create task (POST)
+    async function createTask(title) {
+      const res = await fetch(API, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ title }),
+      });
+      
+      if (!res.ok) {
+          const errData = await res.json();
+          throw new Error(errData.error || "Error creating task");
+      }
+      loadTasks();
+    }
+
+    // Toggle completion (PUT/PATCH)
+    async function toggleTask(id, completedStatus) {
+      try {
+        const res = await fetch(`${API}/${id}`, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ completed: completedStatus }),
+        });
+        
+        if (!res.ok) throw new Error("Update failed");
+        loadTasks();
+      } catch (e) {
+        showError(e.message);
+        loadTasks(); // Refresh to sync UI
+      }
+    }
+
+    // Delete task (DELETE)
+    async function deleteTask(id) {
+      if (!id || !confirm("Delete this task permanently?")) return;
+      
+      try {
+        const res = await fetch(`${API}/${id}`, { method: "DELETE" });
+        if (!res.ok) throw new Error("Delete failed");
+        loadTasks();
+      } catch (e) {
+        showError(e.message);
+      }
+    }
+
+    // Edit title (PUT)
+    async function saveEdit(id, newTitle) {
+      try {
+        const res = await fetch(`${API}/${id}`, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ title: newTitle }),
+        });
+        if (!res.ok) throw new Error("Edit failed");
+        loadTasks();
+      } catch (e) {
+        showError(e.message);
+      }
+    }
+
+    function startEdit(li, task, id) {
+      const label = li.querySelector(".checkbox-label");
+      const titleSpan = li.querySelector(".title-text");
+      const editBtn = li.querySelector(".btn-edit");
+
+      const input = document.createElement("input");
+      input.type = "text";
+      input.className = "edit-input";
+      input.value = task.title;
+
+      label.replaceChild(input, titleSpan);
+      editBtn.textContent = "Save";
+      input.focus();
+
+      const finish = () => {
+        const val = input.value.trim();
+        if (val && val !== task.title) {
+          saveEdit(id, val);
+        } else {
+          loadTasks();
+        }
+      };
+
+      editBtn.onclick = finish;
+      input.onkeydown = e => {
+        if (e.key === "Enter") finish();
+        if (e.key === "Escape") loadTasks();
+      };
+    }
+
+    addForm.onsubmit = async e => {
+      e.preventDefault();
+      const title = newTitle.value.trim();
+      if (!title) return;
+      
+      try {
+        await createTask(title);
+        newTitle.value = "";
+      } catch (e) {
+        showError(e.message);
+      }
+    };
+
+    // Initial Load
+    loadTasks();
+  </script>
+</body>
+</html>

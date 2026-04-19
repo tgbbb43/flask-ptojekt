@@ -1,17 +1,18 @@
-from flask import Flask, jsonify, request
-from werkzeug.exceptions import NotFound, BadRequest, Conflict, UnprocessableEntity
-from errors import *
+from flask import Flask, render_template
+from db import init_db
 from routes import tasks_bp
-from errors import error_bp
 
 app = Flask(__name__)
-    
+
+
+init_db(app)
 
 
 app.register_blueprint(tasks_bp)
-app.register_blueprint(error_bp)
 
-   
+@app.route("/")
+def index():
+    return render_template("index.html")
 
 if __name__ == "__main__":
     app.run(debug=True)

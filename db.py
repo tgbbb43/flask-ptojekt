@@ -2,10 +2,21 @@ import os
 from dotenv import load_dotenv
 from pymongo import MongoClient
 
-
 load_dotenv()
 
+_client = None
+_db = None
 
-mongo_uri = os.getenv("MONGO_URI")
-client = MongoClient(mongo_uri)
-database = client["prod"]
+def init_db(app):
+    global _client, _db
+    mongo_uri = os.getenv("MONGO_URI")
+    _client = MongoClient(mongo_uri)
+    _db = _client["prod"]
+    app.config["DB"] = _db
+
+def get_collection(name):
+    global _db
+    if _db is None:
+       
+        pass
+    return _db[name]

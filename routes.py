@@ -1,15 +1,15 @@
 from flask import request, jsonify, Blueprint
 from werkzeug.exceptions import NotFound, BadRequest, Conflict, UnprocessableEntity
 from models import tasks
-from db import database
+from db import get_collection
 import uuid
 tasks_bp = Blueprint("tasks", __name__)
 
 
 @tasks_bp.route("/tasks", methods=["GET"])
 def get_tasks():
-
-    all_tasks = list(database.todo.find())
+    col = get_collection("todo")
+    all_tasks = list(col.find())
     for task in all_tasks:
         task["_id"] = str(task["_id"])
     return jsonify(all_tasks)
@@ -19,8 +19,8 @@ def get_tasks():
 
 @tasks_bp.route("/tasks/<task_id>", methods=["GET"])
 def get_task(task_id: str):
-  
-    task = database.todo.find_one({"_id":task_id})
+    col = get_collection("todo")
+    task = col.find_one({"_id":task_id})
     if not task:
         raise NotFound(f"Task {task_id} not found")
     task["_id"] = str(task["_id"])  
@@ -29,7 +29,7 @@ def get_task(task_id: str):
 
 @tasks_bp.route("/tasks", methods=["POST"])
 def create_task():
-    # `silent=True` lets us raise our own JSON-friendly validation error.
+    col = get_collection("todo")
     data = request.get_json(silent=True)
     if not data or not isinstance(data, dict):
         raise BadRequest("request body must be json")
@@ -48,7 +48,7 @@ def create_task():
         "completed": False  
     }
     
-    database.todo.insert_one(new_task)
+    col.insert_one(new_task)
 
     
     new_task["_id"] = str(new_task["_id"])
@@ -63,7 +63,7 @@ def create_task():
 @tasks_bp.route("/tasks/<task_id>", methods=["PUT"])
 def change_task(task_id):
     data = request.get_json(silent=True)
-
+    col = get_collection("todo")
     if not data or not isinstance(data, dict):
         raise BadRequest("error: update request must contain data")
 
@@ -84,7 +84,7 @@ def change_task(task_id):
             raise BadRequest("completed must be a boolean")
 
  
-    result = database.todo.update_one(
+    result =col.update_one(
         {"_id": str(task_id)},
         {"$set": data} 
     )
@@ -97,9 +97,9 @@ def change_task(task_id):
 @tasks_bp.route("/tasks/<task_id>", methods=["PATCH"])
 def patch_task_completed(task_id):
     data = request.get_json()
-    
+    col = get_collection("todo")
    
-    result = database.todo.update_one(
+    result = col.update_one(
         {"_id": str(task_id)},
         {"$set": {"completed": data.get("completed")}}
     )
@@ -112,8 +112,8 @@ def patch_task_completed(task_id):
 
 @tasks_bp.route("/tasks/<task_id>", methods=["DELETE"])
 def delete_task(task_id):
-
-    result = database.todo.delete_one({"_id":task_id})
+    col = get_collection("todo")
+    result = col.delete_one({"_id":task_id})
 
     if result.deleted_count == 0:
         raise NotFound(f"{task_id} not found")
