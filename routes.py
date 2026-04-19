@@ -2,7 +2,7 @@ from flask import request, jsonify, Blueprint
 from werkzeug.exceptions import NotFound, BadRequest, Conflict, UnprocessableEntity
 from models import tasks
 from db import database
-
+import uuid
 tasks_bp = Blueprint("tasks", __name__)
 
 
@@ -15,12 +15,12 @@ def get_tasks():
     return jsonify(all_tasks)
 
 
-from bson.objectid import ObjectId
+
 
 @tasks_bp.route("/tasks/<task_id>", methods=["GET"])
-def get_task(task_id):
+def get_task(task_id: str):
   
-    task = database.todo.find_one({"_id": ObjectId(task_id)})
+    task = database.todo.find_one({"_id":task_id})
     if not task:
         raise NotFound(f"Task {task_id} not found")
     task["_id"] = str(task["_id"])  
@@ -43,6 +43,7 @@ def create_task():
 
     # New tasks get a generated id and start as incomplete.
     new_task = {
+        "_id": str(uuid.uuid4()),
         "title": title.strip(),
         "completed": False  
     }
@@ -57,7 +58,7 @@ def create_task():
     }), 201
 
 
-from bson.objectid import ObjectId
+
 
 @tasks_bp.route("/tasks/<task_id>", methods=["PUT"])
 def change_task(task_id):
@@ -84,7 +85,7 @@ def change_task(task_id):
 
  
     result = database.todo.update_one(
-        {"_id": ObjectId(task_id)},
+        {"_id": str(task_id)},
         {"$set": data} 
     )
 
@@ -99,7 +100,7 @@ def patch_task_completed(task_id):
     
    
     result = database.todo.update_one(
-        {"_id": ObjectId(task_id)},
+        {"_id": str(task_id)},
         {"$set": {"completed": data.get("completed")}}
     )
     
@@ -112,7 +113,7 @@ def patch_task_completed(task_id):
 @tasks_bp.route("/tasks/<task_id>", methods=["DELETE"])
 def delete_task(task_id):
 
-    result = database.todo.delete_one({"_id": ObjectId(task_id)})
+    result = database.todo.delete_one({"_id":task_id})
 
     if result.deleted_count == 0:
         raise NotFound(f"{task_id} not found")
